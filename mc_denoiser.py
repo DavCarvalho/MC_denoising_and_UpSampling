@@ -184,11 +184,10 @@ class Upsampler(nn.Module):
 def grad_loss(pred, hr):
     """L1 nas diferenças finitas (gradientes da IMAGEM) -> enfatiza bordas/textura.
 
-    >>> CUIDADO NA HORA (não confundir!): este 'grad_loss' é uma PERDA sobre os
+     CUIDADO NA HORA (não confundir!): este 'grad_loss' é uma PERDA sobre os
     gradientes da imagem, para FORÇAR bordas nítidas. Ele NÃO é a 'renderização em
     gradiente-domínio' da Aula 6 (aquela RENDERIZAVA os gradientes para o ruído
-    cancelar). São coisas diferentes que por acaso usam a palavra 'gradiente'.
-    Se alguém perguntar, deixe isso claro — mostra domínio do assunto."""
+    cancelar).."""
     dx_p = pred[:, :, :, 1:] - pred[:, :, :, :-1]     # diferença horizontal (pred)
     dy_p = pred[:, :, 1:, :] - pred[:, :, :-1, :]     # diferença vertical (pred)
     dx_h = hr[:, :, :, 1:] - hr[:, :, :, :-1]         # idem no gabarito
