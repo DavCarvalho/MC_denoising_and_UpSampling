@@ -1,0 +1,159 @@
+<h2 class="sr-only">Demonstração interativa comparando PSNR e SSIM ao degradar uma imagem com ruído, borrão e brilho.</h2>
+<style>
+.ssim-cv { display:flex; gap:16px; flex-wrap:wrap; margin:0 0 1.25rem; }
+.ssim-col { flex:1; min-width:150px; }
+.ssim-col canvas { width:100%; aspect-ratio:1; border-radius:var(--border-radius-md); border:0.5px solid var(--color-border-tertiary); image-rendering:pixelated; display:block; }
+.ssim-col p { font-size:13px; color:var(--color-text-secondary); margin:6px 0 0; text-align:center; }
+.ssim-ctl { display:grid; grid-template-columns:84px 1fr 44px; align-items:center; gap:10px 12px; margin:0 0 1.25rem; }
+.ssim-ctl label { font-size:14px; color:var(--color-text-secondary); }
+.ssim-ctl span { font-size:14px; font-weight:500; text-align:right; }
+.ssim-cards { display:grid; grid-template-columns:repeat(auto-fit,minmax(0,1fr)); gap:12px; margin:0 0 1rem; }
+.ssim-card { background:var(--color-background-secondary); border-radius:var(--border-radius-md); padding:0.9rem 1rem; }
+.ssim-card .lab { font-size:13px; color:var(--color-text-secondary); }
+.ssim-card .val { font-size:24px; font-weight:500; margin-top:2px; }
+.ssim-sub { display:grid; grid-template-columns:repeat(3,1fr); gap:12px; }
+.ssim-sub .ssim-card .val { font-size:18px; }
+#ssim-hint { font-size:14px; color:var(--color-text-secondary); line-height:1.6; min-height:2.6em; }
+</style>
+
+<div class="ssim-cv">
+  <div class="ssim-col"><canvas id="ref-cv"></canvas><p>Referência (gabarito)</p></div>
+  <div class="ssim-col"><canvas id="deg-cv"></canvas><p>Degradada</p></div>
+</div>
+
+<div class="ssim-ctl">
+  <label for="s-noise">Ruído</label>
+  <input type="range" id="s-noise" min="0" max="60" value="22" step="1">
+  <span id="o-noise">22</span>
+  <label for="s-blur">Borrão</label>
+  <input type="range" id="s-blur" min="0" max="5" value="1" step="1">
+  <span id="o-blur">1</span>
+  <label for="s-bright">Brilho</label>
+  <input type="range" id="s-bright" min="0" max="80" value="0" step="1">
+  <span id="o-bright">0</span>
+</div>
+
+<div class="ssim-cards">
+  <div class="ssim-card"><div class="lab">PSNR</div><div class="val" id="m-psnr">–</div></div>
+  <div class="ssim-card"><div class="lab">SSIM</div><div class="val" id="m-ssim">–</div></div>
+</div>
+<div class="ssim-sub">
+  <div class="ssim-card"><div class="lab">Luminância (l)</div><div class="val" id="m-l">–</div></div>
+  <div class="ssim-card"><div class="lab">Contraste (c)</div><div class="val" id="m-c">–</div></div>
+  <div class="ssim-card"><div class="lab">Estrutura (s)</div><div class="val" id="m-s">–</div></div>
+</div>
+<p id="ssim-hint"></p>
+
+<script>
+(function(){
+  const N=160;
+  const ref=document.getElementById('ref-cv'), deg=document.getElementById('deg-cv');
+  ref.width=N; ref.height=N; deg.width=N; deg.height=N;
+  const rctx=ref.getContext('2d'), dctx=deg.getContext('2d');
+
+  function drawRef(){
+    for(let y=0;y<N;y++){
+      const t=y/N, g=Math.round(70+t*70);
+      rctx.fillStyle='rgb('+g+','+g+','+(g+8)+')';
+      rctx.fillRect(0,y,N,1);
+    }
+    rctx.fillStyle='#1D9E75'; rctx.fillRect(16,20,52,52);
+    rctx.fillStyle='#EF9F27'; rctx.fillRect(92,18,52,40);
+    rctx.fillStyle='#D85A30'; rctx.beginPath(); rctx.arc(112,112,30,0,7); rctx.fill();
+    rctx.fillStyle='#378ADD'; rctx.fillRect(18,92,46,46);
+    rctx.strokeStyle='#26215C'; rctx.lineWidth=2;
+    for(let i=0;i<7;i++){ rctx.beginPath(); rctx.moveTo(74,84+i*10); rctx.lineTo(150,78+i*10); rctx.stroke(); }
+    rctx.strokeStyle='#4B1528'; rctx.beginPath(); rctx.moveTo(0,0); rctx.lineTo(N,N); rctx.stroke();
+  }
+
+  function boxBlur(src,r){
+    if(r<=0) return src.slice();
+    const out=new Float32Array(src.length), tmp=new Float32Array(src.length);
+    for(let c=0;c<3;c++){
+      for(let y=0;y<N;y++){ for(let x=0;x<N;x++){
+        let s=0,n=0; for(let k=-r;k<=r;k++){ const xx=x+k; if(xx>=0&&xx<N){ s+=src[(y*N+xx)*4+c]; n++; } }
+        tmp[(y*N+x)*4+c]=s/n;
+      }}
+      for(let x=0;x<N;x++){ for(let y=0;y<N;y++){
+        let s=0,n=0; for(let k=-r;k<=r;k++){ const yy=y+k; if(yy>=0&&yy<N){ s+=tmp[(yy*N+x)*4+c]; n++; } }
+        out[(y*N+x)*4+c]=s/n;
+      }}
+    }
+    for(let i=0;i<src.length;i+=4) out[i+3]=255;
+    return out;
+  }
+
+  function luma(arr){
+    const L=new Float64Array(N*N);
+    for(let i=0,p=0;i<arr.length;i+=4,p++) L[p]=0.299*arr[i]+0.587*arr[i+1]+0.114*arr[i+2];
+    return L;
+  }
+
+  function stats(a,b){
+    const n=a.length; let ma=0,mb=0;
+    for(let i=0;i<n;i++){ ma+=a[i]; mb+=b[i]; } ma/=n; mb/=n;
+    let va=0,vb=0,cov=0;
+    for(let i=0;i<n;i++){ const da=a[i]-ma, db=b[i]-mb; va+=da*da; vb+=db*db; cov+=da*db; }
+    va/=n; vb/=n; cov/=n;
+    return {ma,mb,va,vb,cov};
+  }
+
+  let refData;
+  function update(){
+    const noise=+document.getElementById('s-noise').value;
+    const blur=+document.getElementById('s-blur').value;
+    const bright=+document.getElementById('s-bright').value;
+    document.getElementById('o-noise').textContent=noise;
+    document.getElementById('o-blur').textContent=blur;
+    document.getElementById('o-bright').textContent=bright;
+
+    let d=boxBlur(refData.data,blur);
+    const out=new Uint8ClampedArray(d.length);
+    for(let i=0;i<d.length;i+=4){
+      for(let c=0;c<3;c++){
+        let v=d[i+c]+bright+(noise>0?(Math.random()*2-1)*noise:0);
+        out[i+c]=v<0?0:v>255?255:v;
+      }
+      out[i+3]=255;
+    }
+    dctx.putImageData(new ImageData(out,N,N),0,0);
+
+    const La=luma(refData.data), Lb=luma(out);
+    let mse=0; for(let i=0;i<La.length;i++){ const e=La[i]-Lb[i]; mse+=e*e; } mse/=La.length;
+    const psnr = mse<1e-9 ? Infinity : 10*Math.log10(255*255/mse);
+
+    const {ma,mb,va,vb,cov}=stats(La,Lb);
+    const C1=6.5025, C2=58.5225, C3=C2/2;
+    const sa=Math.sqrt(Math.max(va,0)), sb=Math.sqrt(Math.max(vb,0));
+    const l=(2*ma*mb+C1)/(ma*ma+mb*mb+C1);
+    const c=(2*sa*sb+C2)/(va+vb+C2);
+    const s=(cov+C3)/(sa*sb+C3);
+    const ssim=l*c*s;
+
+    document.getElementById('m-psnr').textContent = psnr===Infinity ? '∞ dB' : psnr.toFixed(1)+' dB';
+    document.getElementById('m-ssim').textContent = ssim.toFixed(3);
+    document.getElementById('m-l').textContent = l.toFixed(3);
+    document.getElementById('m-c').textContent = c.toFixed(3);
+    document.getElementById('m-s').textContent = s.toFixed(3);
+
+    let hint='';
+    if(noise===0&&blur===0&&bright===0){
+      hint='Sem degradação: imagem idêntica, PSNR infinito e SSIM = 1.';
+    } else if(bright>=30 && noise<=12 && blur<=1){
+      hint='Repare: o brilho derruba o PSNR e a luminância (l), mas a estrutura (s) e o contraste (c) seguem altos — o padrão da imagem não mudou. É exatamente onde o SSIM discorda do PSNR.';
+    } else if(blur>=3 && noise<=10){
+      hint='O borrão ataca o contraste (c) e a estrutura (s): as bordas somem. O SSIM cai mesmo quando o brilho médio continua certo.';
+    } else if(noise>=30){
+      hint='Ruído alto: todos os termos sofrem, mas o PSNR despenca rápido por causa do erro elevado ao quadrado.';
+    } else {
+      hint='Ajuste cada controle separadamente para ver qual termo do SSIM (l, c ou s) ele afeta mais.';
+    }
+    document.getElementById('ssim-hint').textContent=hint;
+  }
+
+  drawRef();
+  refData=rctx.getImageData(0,0,N,N);
+  ['s-noise','s-blur','s-bright'].forEach(id=>document.getElementById(id).addEventListener('input',update));
+  update();
+})();
+</script>
