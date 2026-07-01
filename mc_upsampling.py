@@ -8,7 +8,6 @@ O QUE ESTE ARQUIVO É: um upsampler espacial 4x (renderiza/recebe uma imagem
 pequena e a amplia 4x com uma rede neural). É a parte prática do pilar de
 UPSAMPLING das aulas.
 
->>> CAVEAT HONESTO — DIGA ISTO EM VOZ ALTA NA APRESENTAÇÃO (impressiona a banca):
     O DIV2K é um dataset de FOTOS, e eu crio a imagem de baixa resolução
     REDUZINDO a foto (linha 'lr = hr.resize(...)'). Então, tecnicamente, este
     demo é SUPER-RESOLUÇÃO DE FOTO — o problema de DESBORRAR que citei na Aula 7.
@@ -28,7 +27,7 @@ POR QUE A VERSÃO ANTERIOR FICAVA BORRADA (quase igual ao bicúbico) — e o con
          a rede prefere jogar seguro e borrar.
        - Agora: L1 + perda de GRADIENTE (bordas) + perda PERCEPTUAL (VGG).
          Isso RECOMPENSA a rede por reconstruir textura/detalhe -> mais nítido.
-     >>> NA HORA: "O peso de cada perda é exatamente onde eu deslizo entre
+      "O peso de cada perda é exatamente onde eu deslizo entre
          'estável' e 'nítido' — o trade-off do slide."
 
   2) ARQUITETURA (EDSR-lite) — o EDSR é um dos métodos citados no survey (o Wei
@@ -112,7 +111,7 @@ class DIV2KLocal(Dataset):
         else:
             w2 = (W // SCALE) * SCALE; h2 = (H // SCALE) * SCALE
             hr = hr.crop((0, 0, w2, h2))
-        # >>> A LINHA DO CAVEAT <<<
+        
         # Criamos a imagem de baixa resolução (LR) REDUZINDO a foto de alta (HR)
         # com bicúbico. Por isso este demo é SUPER-RESOLUÇÃO DE FOTO (desborrar),
         # e NÃO o upsampling de renderização (antialiasing + motion vectors).
@@ -184,7 +183,7 @@ class Upsampler(nn.Module):
 def grad_loss(pred, hr):
     """L1 nas diferenças finitas (gradientes da IMAGEM) -> enfatiza bordas/textura.
 
-    >>> CUIDADO NA HORA (não confundir!): este 'grad_loss' é uma PERDA sobre os
+     este 'grad_loss' é uma PERDA sobre os
     gradientes da imagem, para FORÇAR bordas nítidas. Ele NÃO é a 'renderização em
     gradiente-domínio' da Aula 6 (aquela RENDERIZAVA os gradientes para o ruído
     cancelar). São coisas diferentes que por acaso usam a palavra 'gradiente'.
